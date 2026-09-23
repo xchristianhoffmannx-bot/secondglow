@@ -1,0 +1,8 @@
+name = "secondglow"
+main = "index.js"
+compatibility_date = "2026-09-01"
+compatibility_flags = ["nodejs_compat"]
+
+[[kv_namespaces]]
+binding = "LIMIT"
+id = "e4d0b9d312044ff48c3858602caa5202"
