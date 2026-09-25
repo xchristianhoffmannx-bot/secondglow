@@ -32,12 +32,15 @@ function composeDescription(r, off = [], m = {}, footer = '') {
   return blocks.filter(Boolean).join('\n\n');
 }
 
+// Schuhgröße geht als Stichwort an Claude – Stichworte haben dort Vorrang vor den Fotos
+const notesFor = (notes, shoe) => [String(notes || '').trim(), String(shoe || '').trim() && `Schuhgröße (EU): ${String(shoe).trim()}`].filter(Boolean).join('\n');
+
 const DEFAULT_FOOTER = 'Tierfreier Nichtraucherhaushalt 🌿\nVersand innerhalb von 2 Tagen. Schau gern in meinen Kleiderschrank – Bündeln spart Versand!';
 const DEFAULT_EXAMPLES = '';
 const defaults = () => ({ set: { footer: DEFAULT_FOOTER, examples: DEFAULT_EXAMPLES, code: '' }, items: [] });
 const uid = () => Math.random().toString(36).slice(2, 9);
 
-if (typeof module !== 'undefined') module.exports = { priceRange, composeDescription, measureText, r05, num };
+if (typeof module !== 'undefined') module.exports = { priceRange, composeDescription, measureText, notesFor, r05, num };
 
 // ---------- Oberfläche ----------
 if (typeof document !== 'undefined') (() => {
@@ -47,7 +50,7 @@ if (typeof document !== 'undefined') (() => {
   let S = load(), tab = 'new', busy = false, err = '';
   // Aktueller Entwurf. Fotos nur im Speicher: Vinted bekommt sie von ihr direkt.
   let cur = blank();
-  function blank() { return { photos: [], notes: '', m: { a: '', l: '', b: '', o: '' }, newPrice: '', r: null, off: [], id: null, change: '' }; }
+  function blank() { return { photos: [], notes: '', m: { a: '', l: '', b: '', o: '' }, newPrice: '', shoe: '', r: null, off: [], id: null, change: '' }; }
 
   const $ = s => document.querySelector(s);
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -68,8 +71,10 @@ if (typeof document !== 'undefined') (() => {
       </section>
       <section class="card"><h2>Deine Stichworte <span class="count">(optional)</span></h2>
         <textarea data-c="notes" placeholder="z. B. kaum getragen, fällt klein aus, Zara">${esc(cur.notes)}</textarea>
-        <details${measureText(cur.m) || cur.newPrice ? ' open' : ''}><summary>Maße & Neupreis (optional)</summary>
+        <details${measureText(cur.m) || cur.newPrice || cur.shoe ? ' open' : ''}><summary>Maße, Schuhgröße & Neupreis (optional)</summary>
           <div class="g3">${cm('a')}${cm('l')}${cm('b')}</div>
+          ${field('data-c="shoe" type="text" inputmode="decimal" list="shoes"', cur.shoe, 'Schuhgröße (EU)', 'placeholder="z. B. 39"')}
+          <datalist id="shoes">${Array.from({ length: 25 }, (_, i) => `<option value="${String(34 + i / 2).replace('.', ',')}">`).join('')}</datalist>
           ${field('data-m="o" type="text"', cur.m.o, 'Andere Maße', 'placeholder="z. B. Deko: 20 × 15 × 8 cm"')}
           ${field('data-c="newPrice" type="text" inputmode="decimal"', cur.newPrice, 'Neupreis (€) – für einen Preis-Richtwert')}
         </details>
@@ -100,10 +105,11 @@ if (typeof document !== 'undefined') (() => {
 
   function resultView() {
     const r = cur.r, desc = composeDescription(r, cur.off, cur.m, S.set.footer), range = priceRange(cur.newPrice, r.condition);
-    const cnt = (n, max) => `<span class="count${n > max ? ' over' : ''}">${n}/${max}</span>`;
+    const cnt = cntHtml;
     return `${WORKER_URL ? '' : '<div class="banner">Test-Modus: Beispieltext.</div>'}
-    <section class="card"><div class="row"><h2>Titel</h2>${cnt(r.title.length, TITLE_MAX)}</div>
-      <p class="out">${esc(r.title)}</p><button class="copy" data-a="copy" data-k="title">Titel kopieren</button></section>
+    <section class="card"><div class="row"><h2>Titel</h2><span id="tcnt">${cnt(r.title.length, TITLE_MAX)}</span></div>
+      <textarea class="out" data-title rows="2" aria-label="Titel bearbeiten">${esc(r.title)}</textarea>
+      <p class="hint" style="margin-top:-4px">Du kannst den Titel direkt ändern.</p><button class="copy" data-a="copy" data-k="title">Titel kopieren</button></section>
     <section class="card"><div class="row"><h2>Beschreibung</h2>${cnt(desc.length, DESC_MAX)}</div>
       <p class="out">${esc(desc)}</p><button class="copy" data-a="copy" data-k="desc">Beschreibung kopieren</button></section>
     ${r.defects.length ? `<section class="card defects"><h2>Erkannte Mängel</h2><p class="hint">Angehakt = steht ehrlich im Text. Verschwiegene Mängel führen bei Vinted zu Rückgaben.</p>
@@ -121,6 +127,8 @@ if (typeof document !== 'undefined') (() => {
       <button class="primary" data-a="apply" ${busy ? 'disabled' : ''}>${busy ? '<span class="spin"></span>' : 'Ändern'}</button></div></section>
     <button class="ghost" data-a="fresh">+ Nächster Artikel</button>`;
   }
+
+  const cntHtml = (n, max) => `<span class="count${n > max ? ' over' : ''}">${n}/${max}</span>`;
 
   function render() {
     $('#app').innerHTML = views[tab]();
@@ -142,7 +150,7 @@ if (typeof document !== 'undefined') (() => {
 
   async function ask(change) {
     const body = {
-      code: S.set.code, notes: cur.notes, measures: measureText(cur.m), examples: S.set.examples,
+      code: S.set.code, notes: notesFor(cur.notes, cur.shoe), measures: measureText(cur.m), examples: S.set.examples,
       images: cur.photos.map(p => p.split(',')[1]), change: change || '', previous: change != null && cur.r ? cur.r : null,
     };
     if (!WORKER_URL) { await new Promise(r => setTimeout(r, 900)); return demo(); }
@@ -164,7 +172,7 @@ if (typeof document !== 'undefined') (() => {
       cur.r = r; cur.off = []; cur.change = '';
       if (fresh) {
         cur.id = uid();
-        S.items.unshift({ id: cur.id, date: Date.now(), thumb: cur.photos[0] ? await thumbOf(cur.photos[0]) : '', notes: cur.notes, m: cur.m, newPrice: cur.newPrice, r, off: [] });
+        S.items.unshift({ id: cur.id, date: Date.now(), thumb: cur.photos[0] ? await thumbOf(cur.photos[0]) : '', notes: cur.notes, m: cur.m, newPrice: cur.newPrice, shoe: cur.shoe, r, off: [] });
         S.items.length = Math.min(S.items.length, MAX_ITEMS); // ponytail: älteste fliegen raus, Speicher bleibt klein
       } else Object.assign(S.items.find(x => x.id === cur.id) || {}, { r, off: [] });
       save();
@@ -193,7 +201,11 @@ if (typeof document !== 'undefined') (() => {
     if (d.c) cur[d.c] = v;
     else if (d.m) cur.m[d.m] = v;
     else if (d.s) { S.set[d.s] = v; save(); }
-    else if (d.off != null) {
+    else if (d.title != null) {
+      // Kein render(): sonst springt der Cursor raus. Nur Zähler und Verlauf nachziehen.
+      cur.r.title = v; $('#tcnt').innerHTML = cntHtml(v.length, TITLE_MAX);
+      const it = S.items.find(x => x.id === cur.id); if (it) { it.r.title = v; save(); }
+    } else if (d.off != null) {
       const i = +d.off; cur.off = e.target.checked ? cur.off.filter(x => x !== i) : [...cur.off, i];
       const it = S.items.find(x => x.id === cur.id); if (it) { it.off = cur.off; save(); }
       render();
