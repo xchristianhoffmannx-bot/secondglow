@@ -99,7 +99,8 @@ if (typeof document !== 'undefined') (() => {
       <section class="card"><h2>Zugangscode</h2><p class="hint">Einmal eingeben, bleibt auf diesem Handy.</p>
         <input data-s="code" type="password" autocomplete="off" value="${esc(s.code)}"></section>
       <section class="card"><h2>Datensicherung</h2><p class="hint">Alles liegt nur auf diesem Handy. Gelegentlich sichern.</p>
-        <div class="two"><button class="ghost" data-a="export">Sichern</button><button class="ghost" data-a="import">Wiederherstellen</button></div></section>`;
+        <div class="two"><button class="ghost" data-a="export">Sichern</button><button class="ghost" data-a="import">Wiederherstellen</button></div></section>
+      <p class="hint" id="ver" style="text-align:center">SecondGlow</p>`;
     },
   };
 
@@ -133,6 +134,11 @@ if (typeof document !== 'undefined') (() => {
   function render() {
     $('#app').innerHTML = views[tab]();
     document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.t === tab));
+    // Version = Name des Caches aus sw.js (sg-vN). Eine Quelle, zeigt, was wirklich auf dem Handy liegt.
+    if (tab === 'set' && 'caches' in window) caches.keys().then(ks => {
+      const v = ks.map(k => /^sg-v(\d+)$/.exec(k)).find(Boolean), el = $('#ver');
+      if (el && v) el.textContent = `SecondGlow · Version ${v[1]}`;
+    }).catch(() => {});
   }
 
   // Fotos verkleinern: schneller, günstiger, Etiketten bleiben lesbar.
